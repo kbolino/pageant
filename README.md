@@ -4,7 +4,7 @@ This repository contains a library for Go that provides a native
 [PuTTY][putty] Pageant SSH agent implementation compatible with the
 [golang.org/x/crypto/ssh/agent][go-ssh-agent] package.
 
-This page, rather unsuprisingly, only works with Windows.
+This package, rather unsuprisingly, only works with Windows.
 See below for alternatives on Unix/Linux platforms. 
 
 [putty]: https://www.chiark.greenend.org.uk/~sgtatham/
