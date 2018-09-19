@@ -73,7 +73,7 @@ func (c *Conn) Read(p []byte) (n int, err error) {
 	} else if c.readOffset == c.readLimit {
 		return 0, io.EOF
 	}
-	bytesToRead := minInt(len(p), int(c.readLimit-c.readOffset))
+	bytesToRead := minInt(len(p), c.readLimit-c.readOffset)
 	src := toSlice(c.sharedMem+uintptr(c.readOffset), bytesToRead)
 	copy(p, src)
 	c.readOffset += bytesToRead
@@ -82,7 +82,7 @@ func (c *Conn) Read(p []byte) (n int, err error) {
 
 func (c *Conn) Write(p []byte) (n int, err error) {
 	if len(p) > agentMaxMsglen {
-		return 0, fmt.Errorf("size of message to send (%d) exceeds max length (%d)", len(p), agentMaxMsglen)
+		return 0, fmt.Errorf("size of request message (%d) exceeds max length (%d)", len(p), agentMaxMsglen)
 	} else if len(p) == 0 {
 		return 0, fmt.Errorf("message to send is empty")
 	}
@@ -108,6 +108,9 @@ func (c *Conn) Write(p []byte) (n int, err error) {
 		}
 	}
 	messageSize := binary.BigEndian.Uint32(toSlice(c.sharedMem, 4))
+	if messageSize > agentMaxMsglen-4 {
+		return 0, fmt.Errorf("size of response message (%d) exceeds max length (%d)", messageSize+4, agentMaxMsglen)
+	}
 	c.readOffset = 0
 	c.readLimit = 4 + int(messageSize)
 	return len(p), nil
