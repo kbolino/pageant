@@ -46,11 +46,10 @@ type Conn struct {
 }
 
 // var _ io.ReadWriteCloser = &Conn{}
-var _ net.Conn = &Conn{}
 
 // NewConn creates a new connection to Pageant.
 // Ensure Close gets called on the returned Conn when it is no longer needed.
-func NewConn() (*Conn, error) {
+func NewConn() (net.Conn, error) {
 	_, err := PageantWindow()
 	if err != nil {
 		return nil, err
