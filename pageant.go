@@ -1,6 +1,7 @@
 // Package pageant provides native Go support for using PuTTY Pageant as an
 // SSH agent with the golang.org/x/crypto/ssh/agent package.
 // Based loosely on the Java JNA package jsch-agent-proxy-pageant.
+// Based on https://github.com/kbolino/pageant of Kristian Bolino
 package pageant
 
 import (
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sync"
 	"syscall"
 	"unsafe"
 
@@ -38,6 +40,7 @@ type Conn struct {
 	readOffset int
 	readLimit  int
 	mapName    string
+	sync.Mutex
 }
 
 var _ io.ReadWriteCloser = &Conn{}
@@ -45,6 +48,10 @@ var _ io.ReadWriteCloser = &Conn{}
 // NewConn creates a new connection to Pageant.
 // Ensure Close gets called on the returned Conn when it is no longer needed.
 func NewConn() (*Conn, error) {
+	_, err := PageantWindow()
+	if err != nil {
+		return nil, err
+	}
 	return &Conn{}, nil
 }
 
@@ -53,6 +60,10 @@ func (c *Conn) Close() error {
 	if c.sharedMem == 0 {
 		return nil
 	}
+
+	c.Lock()
+	defer c.Unlock()
+
 	errUnmap := windows.UnmapViewOfFile(c.sharedMem)
 	errClose := windows.CloseHandle(c.sharedFile)
 	if errUnmap != nil {
@@ -73,6 +84,10 @@ func (c *Conn) Read(p []byte) (n int, err error) {
 	} else if c.readOffset == c.readLimit {
 		return 0, io.EOF
 	}
+
+	c.Lock()
+	defer c.Unlock()
+
 	bytesToRead := minInt(len(p), c.readLimit-c.readOffset)
 	src := toSlice(c.sharedMem+uintptr(c.readOffset), bytesToRead)
 	copy(p, src)
@@ -92,9 +107,14 @@ func (c *Conn) Write(p []byte) (n int, err error) {
 			return 0, fmt.Errorf("failed to close previous connection: %s", err)
 		}
 	}
+
 	if err := c.establishConn(); err != nil {
 		return 0, fmt.Errorf("failed to connect to Pageant: %s", err)
 	}
+
+	c.Lock()
+	defer c.Unlock()
+
 	dst := toSlice(c.sharedMem, len(p))
 	copy(dst, p)
 	data := make([]byte, len(c.mapName)+1)
@@ -116,19 +136,31 @@ func (c *Conn) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-// establishConn creates a new connection to Pageant.
-func (c *Conn) establishConn() error {
-	window, _, err := findWindow.Call(
+// used in establishConn and NewConn
+func PageantWindow() (window uintptr, err error) {
+	window, _, err = findWindow.Call(
 		uintptr(unsafe.Pointer(pageantWindowName)),
 		uintptr(unsafe.Pointer(pageantWindowName)),
 	)
 	if window == 0 {
 		if err != nil && err != noError {
-			return fmt.Errorf("cannot find Pageant window: %s", err)
+			err = fmt.Errorf("cannot find Pageant window: %s", err)
 		} else {
-			return fmt.Errorf("cannot find Pageant window, ensure Pageant is running")
+			err = fmt.Errorf("cannot find Pageant window, ensure Pageant is running")
 		}
+	} else {
+		err = nil
 	}
+	return
+}
+
+// establishConn creates a new connection to Pageant.
+func (c *Conn) establishConn() error {
+	window, err := PageantWindow()
+	if err != nil {
+		return err
+	}
+
 	mapName := fmt.Sprintf("PageantRequest%08x", windows.GetCurrentThreadId())
 	mapNameUTF16 := utf16Ptr(mapName)
 	sharedFile, err := windows.CreateFileMapping(
