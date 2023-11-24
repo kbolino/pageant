@@ -8,9 +8,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"net"
 	"reflect"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -31,7 +33,7 @@ var (
 )
 
 // Conn is a shared-memory connection to Pageant.
-// Conn implements io.Reader, io.Writer, and io.Closer.
+// Conn implements net.Reader, net.Writer, and net.Closer.
 // It is not safe to use Conn in multiple concurrent goroutines.
 type Conn struct {
 	window     windows.Handle
@@ -43,7 +45,8 @@ type Conn struct {
 	sync.Mutex
 }
 
-var _ io.ReadWriteCloser = &Conn{}
+// var _ io.ReadWriteCloser = &Conn{}
+var _ net.Conn = &Conn{}
 
 // NewConn creates a new connection to Pageant.
 // Ensure Close gets called on the returned Conn when it is no longer needed.
@@ -53,6 +56,23 @@ func NewConn() (*Conn, error) {
 		return nil, err
 	}
 	return &Conn{}, nil
+}
+
+// for net.Conn
+func (c *Conn) LocalAddr() net.Addr {
+	return nil
+}
+func (c *Conn) RemoteAddr() net.Addr {
+	return nil
+}
+func (c *Conn) SetDeadline(_ time.Time) error {
+	return nil
+}
+func (c *Conn) SetReadDeadline(_ time.Time) error {
+	return nil
+}
+func (c *Conn) SetWriteDeadline(_ time.Time) error {
+	return nil
 }
 
 // Close frees resources used by Conn.
