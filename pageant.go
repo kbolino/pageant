@@ -45,8 +45,6 @@ type Conn struct {
 	sync.Mutex
 }
 
-// var _ io.ReadWriteCloser = &Conn{}
-
 // NewConn creates a new connection to Pageant.
 // Ensure Close gets called on the returned Conn when it is no longer needed.
 func NewConn() (net.Conn, error) {
@@ -114,6 +112,7 @@ func (c *Conn) Read(p []byte) (n int, err error) {
 	return bytesToRead, nil
 }
 
+// close, establishConn, sendMessage
 func (c *Conn) Write(p []byte) (n int, err error) {
 	if len(p) > agentMaxMsglen {
 		return 0, fmt.Errorf("size of request message (%d) exceeds max length (%d)", len(p), agentMaxMsglen)
